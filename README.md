@@ -1,224 +1,155 @@
-# <a href="https://sites.google.com/view/humanoid-gym/">Humanoid-Gym: Reinforcement Learning for Humanoid Robot with Zero-Shot Sim2Real Transfer</a>
 
-<a href="https://sites.google.com/view/humanoid-gym/"><strong>Project Page</strong></a>
-  |
-  <a href="https://arxiv.org/abs/2404.05695"><strong>arXiv</strong></a>
-  |
-  <a href="https://twitter.com/roboterax/status/1765038672641175662"><strong>Twitter</strong></a>
-
-  <a href="https://github.com/zlw21gxy">Xinyang Gu*</a>, 
-  <a href="https://wangyenjen.github.io/">Yen-Jen Wang*</a>,
-  <a href="http://people.iiis.tsinghua.edu.cn/~jychen/">Jianyu Chen†</a>
-
-  *: Equal contribution. Project Co-lead., †: Corresponding Author.
-
-![Demo](./images/demo.gif)
-
-Humanoid-Gym is an easy-to-use reinforcement learning (RL) framework based on Nvidia Isaac Gym, designed to train locomotion skills for humanoid robots, emphasizing zero-shot transfer from simulation to the real-world environment. Humanoid-Gym also integrates a sim-to-sim framework from Isaac Gym to Mujoco that allows users to verify the trained policies in different physical simulations to ensure the robustness and generalization of the policies.
-
-This codebase is verified by RobotEra's XBot-S (1.2-meter tall humanoid robot) and XBot-L (1.65-meter tall humanoid robot) in a real-world environment with zero-shot sim-to-real transfer.
-
+# humanoid
+## TODO
+* [x] 优化状态估计器的训练（逐步增加估计速度的比例）
+* [x] 添加teacher-student框架
 ## Features
 
-### 1. Humanoid Robot Training
-This repository offers comprehensive guidance and scripts for the training of humanoid robots. Humanoid-Gym features specialized rewards for humanoid robots, simplifying the difficulty of sim-to-real transfer. In this repository, we use RobotEra's XBot-L as a primary example. It can also be used for other robots with minimal adjustments. Our resources cover setup, configuration, and execution. Our goal is to fully prepare the robot for real-world locomotion by providing in-depth training and optimization.
+#### 1, randomization
+在leggedrobot.py中添加了randomization，可以通过config中domainrand来进行设置。
+#### 2, Delay
+在leggedrobot.py中根据实机sim2real需求添加了action_delay，obs_delay，dof_vel_delay，imu_delay，torque_delay，的实现具体作用时间段如图。
+
+![](diagram/delay.png)
+#### 3, RMA
+![](diagram/RMA.PNG)
+
+采用论文中的架构：
+
+- 先用privileged_obs中想要预测的内容输入到expert_encoder中，得到一个latent_pri，在训练时把这个latent_pri cat上obs输入到policy中进行训练，得到一个特权policy。
+- 然后用历史的obs输入到adaptation_encoder中，得到一个latent_est，在训练时用这个latent_est和latent_pri做loss，得到一个可以用历史obs预测privileged_obs的encoder。在部署推理时使用adaptation_encoder。（留了两个接口，一个act_expert，一个act_student，分别在train和play的时候使用）
+- critic网络的输入是privileged_obs，没有latent_pri，不能干扰critic网络的训练。
+
+特性：
+
+- 输入给adaptation_encoder的历史obs不能太少，不然很难学到有效的信息
+- 最好采用一次policy更新训练多次adaptation_encoder的方式，预测的mlp收敛比较慢，可以调节config中的num_adaptation_module_substeps来实现
+- adaptation_encoder得到的这个latent并不能代表具体的观察数值，但是latent会更倾向于与privileged_obs的latent相似，也就是说与假如DreamWaq中的VAEdecoder出来的东西与privileged_obs做loss，那么RMA与DreamWaq做的事情是一样的，但是DreamWaq会更显式相关，并且可以从encoder中取部分用于预测真实观测。
+
+使用：
+
+- 直接task切换到cowa_rma，超参参考cowa_rma_config。
+- actor_input_stack控制输入到actor中的历史个数
+- c_frame_stack控制输入到critic中的历史个数。
+- frame_stack控制输入到adaptation_encoder中的历史数据个数。
+- 输入到expert_encoder中的privileged_obs个数默认是1（最好也是1）。
+- adaptation_module_learning_rate控制adaptation_encoder的学习率。
+- num_adaptation_module_substeps，控制每次actor更新训练几次adaptation_encoder
 
 
-- **Comprehensive Training Guidelines**: We offer thorough walkthroughs for each stage of the training process.
-- **Step-by-Step Configuration Instructions**: Our guidance is clear and succinct, ensuring an efficient setup process.
-- **Execution Scripts for Easy Deployment**: Utilize our pre-prepared scripts to streamline the training workflow.
+#### 4, Estimator
+实现了两种不同的状态估计器，**分别为基于VAE的历史latent与速度vel估计其与基于MLP的速度vel估计器**。
+可以通过指定不同的task来进行切换。
+##### 4.1 VAE
+![](diagram/vae.png)
+采用论文中的架构：
+  - 输入历史观测信息到encoder中获得一个latent，从latent中解码出一个vel，cat obs与latent还有vel输入到policy中进行训练。
+  - 用预测到的vel与真实vel做一个vel_loss，用decoder对latent进行decode然后与next_observation做一个latent_loss，两个loss加起来更新encoder。
 
-### 2. Sim2Sim Support
-We also share our sim2sim pipeline, which allows you to transfer trained policies to highly accurate and carefully designed simulated environments. Once you acquire the robot, you can confidently deploy the RL-trained policies in real-world settings.
+特性：
+  - 可以从latent中预测真实的base_vel，同样的可以扩展到其他观测项。
+  - 论文中用next_observation来更新encoder主要是为了满足‘世界模型’的叙事需要，可以尝试使用privileged_obs来做loss可能会合理很多。
+  
+使用：
+  - 直接--task=cowa_vae切换到cowa_vae。超参在里面有定义
+##### 4.2 Estimator
+使用MLP对真实参数进行预测，estimator会接受obs_history，预测需要的值，这里实现了base_vel的预测，目前效果还不错。
+特性：
+  - estimator独自更新，不参与actor的更新，但是也可以输入预测的值。
+  
+使用：
+  - --task=cowa_est切换到estimator。
+  - 使用了privlegde_obs中最后几项做loss，可以将想要预测的值放到privlegde_obs中，然后修改estimator中的loss_fn即可。
+  - 可以在ppo与OnPolicyRunnerEstimator中修改是否把预测的值作为输入，这里推荐如果使用预测的值，则frame_stack最好不要大，不然训练很难收敛。
+  - 可以更改ppo中的loss_fn的输入来更改要预测的观测值，默认是base_vel。
+###  5,web_visualizer
+用于在没有gui的情况下，可视化训练过程，可以查看训练过程中途查看步态与训练状态。
+安装使用：
+（这里用于安装依赖）：
+`pip install sim_web_visualizer`
+`pip install meshcat`
+手动启动：
+`python -m meshcat.servers.zmqserver`
 
-Our simulator settings, particularly with Mujoco, are finely tuned to closely mimic real-world scenarios. This careful calibration ensures that the performances in both simulated and real-world environments are closely aligned. This improvement makes our simulations more trustworthy and enhances our confidence in their applicability to real-world scenarios.
+实现：
+在legged_gym.py的create_sim中
+sim-web-visualizer：
+- 首先用create_isaac_visualizer创建一个MeshCatVisualizerIsaac类
+- 然后使用bind_visualizer_to_gym读取已经创建的gym和sim，
+- 使用set_gym_instance对gym和sim进行操作，将meshcat可视化需要的函数给bind上去，这样就可以随着sim的更新进行更新。
+self.original_gym = 输入的gym
+self.sim = 输入的sim
 
+性能测试：
+使用visualizer会对训练性能产生影响，具体影响大致如下：
+2048个envs
+1. （4个robot）web &  isaacvis(stopped)：18000 
+2. （4个robot）without web &  isaacvis(stopped)：25000 
+3. （4个robot）web & without isaacvis：19000 
+4. （1个robot）web & without isaacvis ：22000
+## 代码结构
+以下为代码结构的大致解释，可以用作理解参考。
+在运行train.py之后会以下面流程运行：
+`train.py---task_registry.py---on_policy_runner.py---cowa\_config.py---cowa\_env.py`
+train.py的顺序(以VAE为例子)：
+1. 首先会读取task名称，在#./envs/\_\_init\_\_.py中注册的，实例化了CowaFreeEnv, CowaCfg(), CowaCfgPPO_VAE())
+2. make_alg_runner根据CowaCfgPPO_VAE()中定义的runner_class_name, policy_class_name, algorithm_class_name从各个文件读取相的类并实例化。主要是onpolicyrunnerVAE
+![](diagram/structure.png)
+#### 1, algo文件夹：
 
-### 3. Denoising World Model Learning
-#### Robotics: Science and Systems (RSS), 2024 (Best Paper Award Finalist)
-<a href="https://enriquecoronadozu.github.io/rssproceedings2024/rss20/p058.pdf"><strong>Paper</strong></a>
-|
-<a href="https://x.com/wangyenjen/status/1792741940087394540"><strong>Twitter</strong></a>
-
-<a href="https://github.com/zlw21gxy">Xinyang Gu*</a>, 
-<a href="https://wangyenjen.github.io/">Yen-Jen Wang*</a>,
-Xiang Zhu*, Chengming Shi*, Yanjiang Guo, Yichen Liu,
-<a href="http://people.iiis.tsinghua.edu.cn/~jychen/">Jianyu Chen†</a>
-
-*: Equal contribution. Project Co-lead., †: Corresponding Author.
-
-Denoising World Model Learning(DWL) presents an advanced sim-to-real framework that integrates state estimation and system identification. This dual-method approach ensures the robot's learning and adaptation are both practical and effective in real-world contexts.
-
-- **Enhanced Sim-to-real Adaptability**: Techniques to optimize the robot's transition from simulated to real environments.
-- **Improved State Estimation Capabilities**: Advanced tools for precise and reliable state analysis.
-
-### Perceptive Locomotion Learning for Humanoid Robots (Coming Soon!)
-<a href="https://x.com/roboterax/status/1798694054374564010"><strong>Twitter</strong></a>
-
-### Dexterous Hand Manipulation (Coming Soon!)
-<a href="https://x.com/roboterax/status/1791349763448938924"><strong>Twitter</strong></a>
-
-## Installation
-
-1. Generate a new Python virtual environment with Python 3.8 using `conda create -n myenv python=3.8`.
-2. For the best performance, we recommend using NVIDIA driver version 525 `sudo apt install nvidia-driver-525`. The minimal driver version supported is 515. If you're unable to install version 525, ensure that your system has at least version 515 to maintain basic functionality.
-3. Install PyTorch 1.13 with Cuda-11.7:
-   - `conda install pytorch==1.13.1 torchvision==0.14.1 torchaudio==0.13.1 pytorch-cuda=11.7 -c pytorch -c nvidia`
-4. Install numpy-1.23 with `conda install numpy=1.23`.
-5. Install Isaac Gym:
-   - Download and install Isaac Gym Preview 4 from https://developer.nvidia.com/isaac-gym.
-   - `cd isaacgym/python && pip install -e .`
-   - Run an example with `cd examples && python 1080_balls_of_solitude.py`.
-   - Consult `isaacgym/docs/index.html` for troubleshooting.
-6. Install humanoid-gym:
-   - Clone this repository.
-   - `cd humanoid-gym && pip install -e .`
-
-
-
-## Usage Guide
-
-#### Examples
-
-```bash
-# Under the directory humanoid-gym/humanoid
-# Launching PPO Policy Training for 'v1' Across 4096 Environments
-# This command initiates the PPO algorithm-based training for the humanoid task.
-python scripts/train.py --task=humanoid_ppo --run_name v1 --headless --num_envs 4096
-
-# Evaluating the Trained PPO Policy 'v1'
-# This command loads the 'v1' policy for performance assessment in its environment. 
-# Additionally, it automatically exports a JIT model, suitable for deployment purposes.
-python scripts/play.py --task=humanoid_ppo --run_name v1
-
-# Implementing Simulation-to-Simulation Model Transformation
-# This command facilitates a sim-to-sim transformation using exported 'v1' policy.
-# You have to run play.py first to get the JIT model and use it with sim2sim.py
-python scripts/sim2sim.py --load_model /path/to/logs/XBot_ppo/exported/policies/policy_1.pt
-
-# Run our trained policy
-python scripts/sim2sim.py --load_model /path/to/logs/XBot_ppo/exported/policies/policy_example.pt
-
+```plain&#x20;text
+on_policy_runner.py
+保存强化学习ppo算法 
+调用cowa_env.py获取obs与obs_critic。
+调用ppo.py初始化两个模型，一个act一个actor_critic ，critic有更多的参数用作第一个的监督。输入obs得到两个act 
+调用cowa_env.py的step获得新的obs与obs_critic，得到reward与其他参数
 ```
 
-#### 1. Default Tasks
-
-
-- **humanoid_ppo**
-   - Purpose: Baseline, PPO policy, Multi-frame low-level control
-   - Observation Space: Variable $(47 \times H)$ dimensions, where $H$ is the number of frames
-   - $[O_{t-H} ... O_t]$
-   - Privileged Information: $73$ dimensions
-
-- **humanoid_dwl (coming soon)**
-
-#### 2. PPO Policy
-- **Training Command**: For training the PPO policy, execute:
-  ```
-  python humanoid/scripts/train.py --task=humanoid_ppo --load_run log_file_path --name run_name
-  ```
-- **Running a Trained Policy**: To deploy a trained PPO policy, use:
-  ```
-  python humanoid/scripts/play.py --task=humanoid_ppo --load_run log_file_path --name run_name
-  ```
-- By default, the latest model of the last run from the experiment folder is loaded. However, other run iterations/models can be selected by adjusting `load_run` and `checkpoint` in the training config.
-
-#### 3. Sim-to-sim
-- **Please note: Before initiating the sim-to-sim process, ensure that you run `play.py` to export a JIT policy.**
-- **Mujoco-based Sim2Sim Deployment**: Utilize Mujoco for executing simulation-to-simulation (sim2sim) deployments with the command below:
-  ```
-  python scripts/sim2sim.py --load_model /path/to/export/model.pt
-  ```
-
-
-#### 4. Parameters
-- **CPU and GPU Usage**: To run simulations on the CPU, set both `--sim_device=cpu` and `--rl_device=cpu`. For GPU operations, specify `--sim_device=cuda:{0,1,2...}` and `--rl_device={0,1,2...}` accordingly. Please note that `CUDA_VISIBLE_DEVICES` is not applicable, and it's essential to match the `--sim_device` and `--rl_device` settings.
-- **Headless Operation**: Include `--headless` for operations without rendering.
-- **Rendering Control**: Press 'v' to toggle rendering during training.
-- **Policy Location**: Trained policies are saved in `humanoid/logs/<experiment_name>/<date_time>_<run_name>/model_<iteration>.pt`.
-
-#### 5. Command-Line Arguments
-For RL training, please refer to `humanoid/utils/helpers.py#L161`.
-For the sim-to-sim process, please refer to `humanoid/scripts/sim2sim.py#L169`.
-
-## Code Structure
-
-1. Every environment hinges on an `env` file (`legged_robot.py`) and a `configuration` file (`legged_robot_config.py`). The latter houses two classes: `LeggedRobotCfg` (encompassing all environmental parameters) and `LeggedRobotCfgPPO` (denoting all training parameters).
-2. Both `env` and `config` classes use inheritance.
-3. Non-zero reward scales specified in `cfg` contribute a function of the corresponding name to the sum-total reward.
-4. Tasks must be registered with `task_registry.register(name, EnvClass, EnvConfig, TrainConfig)`. Registration may occur within `envs/__init__.py`, or outside of this repository.
-
-
-## Add a new environment 
-
-The base environment `legged_robot` constructs a rough terrain locomotion task. The corresponding configuration does not specify a robot asset (URDF/ MJCF) and no reward scales.
-
-1. If you need to add a new environment, create a new folder in the `envs/` directory with a configuration file named `<your_env>_config.py`. The new configuration should inherit from existing environment configurations.
-2. If proposing a new robot:
-    - Insert the corresponding assets in the `resources/` folder.
-    - In the `cfg` file, set the path to the asset, define body names, default_joint_positions, and PD gains. Specify the desired `train_cfg` and the environment's name (python class).
-    - In the `train_cfg`, set the `experiment_name` and `run_name`.
-3. If needed, create your environment in `<your_env>.py`. Inherit from existing environments, override desired functions and/or add your reward functions.
-4. Register your environment in `humanoid/envs/__init__.py`.
-5. Modify or tune other parameters in your `cfg` or `cfg_train` as per requirements. To remove the reward, set its scale to zero. Avoid modifying the parameters of other environments!
-6. If you want a new robot/environment to perform sim2sim, you may need to modify `humanoid/scripts/sim2sim.py`: 
-    - Check the joint mapping of the robot between MJCF and URDF.
-    - Change the initial joint position of the robot according to your trained policy.
-
-## Troubleshooting
-
-Observe the following cases:
-
-```bash
-# error
-ImportError: libpython3.8.so.1.0: cannot open shared object file: No such file or directory
-
-# solution
-# set the correct path
-export LD_LIBRARY_PATH="~/miniconda3/envs/your_env/lib:$LD_LIBRARY_PATH" 
-
-# OR
-sudo apt install libpython3.8
-
-# error
-AttributeError: module 'distutils' has no attribute 'version'
-
-# solution
-# install pytorch 1.12.0
-conda install pytorch torchvision torchaudio cudatoolkit=11.3 -c pytorch
-
-# error, results from libstdc++ version distributed with conda differing from the one used on your system to build Isaac Gym
-ImportError: /home/roboterax/anaconda3/bin/../lib/libstdc++.so.6: version `GLIBCXX_3.4.20` not found (required by /home/roboterax/carbgym/python/isaacgym/_bindings/linux64/gym_36.so)
-
-# solution
-mkdir ${YOUR_CONDA_ENV}/lib/_unused
-mv ${YOUR_CONDA_ENV}/lib/libstdc++* ${YOUR_CONDA_ENV}/lib/_unused
+```plain&#x20;text
+ppo.py
+实例化模型actor_critic,输入observation得到action
+用update来更新网络
 ```
 
-## Citation
-
-Please cite the following if you use this code or parts of it:
-```
-@article{gu2024humanoid,
-  title={Humanoid-Gym: Reinforcement Learning for Humanoid Robot with Zero-Shot Sim2Real Transfer},
-  author={Gu, Xinyang and Wang, Yen-Jen and Chen, Jianyu},
-  journal={arXiv preprint arXiv:2404.05695},
-  year={2024}
-}
-
-@inproceedings{gu2024advancing,
-  title={Advancing Humanoid Locomotion: Mastering Challenging Terrains with Denoising World Model Learning},
-  author={Gu, Xinyang and Wang, Yen-Jen and Zhu, Xiang and Shi, Chengming and Guo, Yanjiang and Liu, Yichen and Chen, Jianyu},
-  booktitle={Robotics: Science and Systems},
-  year={2024},
-  url={https://enriquecoronadozu.github.io/rssproceedings2024/rss20/p058.pdf}
-}
+```python
+actor_critic.py
+定义了actor，critic网络，实例化了vae，mlp（若有）。
+act中定义了输入
 ```
 
-## Acknowledgment
+#### 2, envs文件夹：
 
-The implementation of Humanoid-Gym relies on resources from [legged_gym](https://github.com/leggedrobotics/legged_gym) and [rsl_rl](https://github.com/leggedrobotics/rsl_rl) projects, created by the Robotic Systems Lab. We specifically utilize the `LeggedRobot` implementation from their research to enhance our codebase.
+```plain&#x20;text
+base/logged_robot.py
+包含了bot在isaac环境中的交互方式，各种策略
+包含了step，得到action后step来更新新的状态
+包含了compute_reward，用来计算reward
+```
 
-## Any Questions?
+```plain&#x20;text
+cowa_config.py
+定义了urdf的路径用于bot读取。
+定义了训练的issac环境参数。
+定义了奖励scale用于管理奖励。
+定义了超参数可以在这里设置。
+```
 
-If you have any more questions, please contact [support@robotera.com](mailto:support@robotera.com) or create an issue in this repository.
+```plain&#x20;text
+config_env.py
+定义了如何计算observation与reward
+定义了step，调用了base/legged_robot中的step用来更改电机的状态。
+```
+
+#### 3, utils文件夹：
+
+```plain&#x20;text
+terrain.py:使用了Isaac Gym用来初始化地形
+task_registry.py:被train.py调用，包含了两个make_env与make_alg_runner用来读取confg初始化环境与算法
+```
+
+#### 4, scripts文件夹：内涵执行脚本
+
+```plain&#x20;text
+train.py:调用task_registry创建环境与算法，调用on_pilicy_runner开始训练。
+```
+

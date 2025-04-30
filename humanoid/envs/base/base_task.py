@@ -124,6 +124,7 @@ class BaseTask():
                 self.envs[0], camera_properties)
             self.camera_handle = camera_handle
 
+
     def get_observations(self):
         return self.obs_buf
 

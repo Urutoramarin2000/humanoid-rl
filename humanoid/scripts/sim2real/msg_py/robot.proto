@@ -1,0 +1,191 @@
+syntax = "proto2";
+package COWA.HumanoidMsg;
+// 关节电机msg
+enum Mode {
+  NONE = 0;
+  VELOCITY_MODE = 1;
+  POSITION_MODE = 2;
+  TORQUE_MODE = 3;
+  INTERPOLATE_MODE = 4;
+};
+message Joint {
+  enum Error {
+    NORMAL = 0; // 正常
+    TIME_OUT = 1; // 超时
+  };
+  optional Mode mode = 1;
+  optional double pos = 2;
+  optional double speed = 3;
+  optional double torque = 4;
+  optional double current = 5;
+  optional Error error = 6;
+};
+
+// 调试信息
+message DebugField
+{
+  optional bytes field = 1;
+  optional float value = 2;
+}
+
+// 姿态均为 默认站立下 前x左y上z 右手坐标系
+// 手臂关节msg
+message Arm {
+  optional Joint shoulder_pitch = 1; // 前后摆臂肩关节
+  optional Joint shoulder_roll = 2; // 左右抬升肩关节
+  optional Joint upper_arm = 3; // 大臂
+  optional Joint lower_arm = 4; // 小臂
+  optional Joint wrists = 5; // 手腕
+};
+
+// 腰部关节msg
+message Waist {
+  optional Joint waist_roll = 1; // 腰部绕X旋转
+  optional Joint waist_yaw = 2; // 腰部绕Z旋转
+};
+
+// 腿部关节msg
+message Leg {
+  optional Joint hip_roll = 1; // 绕X旋髋关节
+  optional Joint hip_yaw = 2; // 绕Z旋髋关节
+  optional Joint thigh_back = 3; // 小腿-屈伸 hip-pitch
+  optional Joint thigh_front = 4; // 大腿-屈伸 knee-pitch
+  optional Joint calve_left = 5; // 小腿-左推出 pitch
+  optional Joint calve_right = 6; // 小腿-右推出 roll
+};
+
+// 手关节 msg
+message Hand {};
+
+
+message Drive {
+  enum RobotMode {
+    INVALID = 0; // 所有关节处于0位
+    PASSIVE = 1; // 被动模式
+    WALKING = 2; // 自动模式 - 行走等各任务流所处模式
+    EMERGENCY_MODE = 3;
+    STANDBY_MODE = 4; // 状态机切换
+    STANDING = 5;
+  };
+  optional RobotMode robot_mode = 1;
+  optional Mode speed_mode = 2;
+};
+
+enum RobotError {
+  NO_ERROR = 0;
+  CONTROL_TIMEOUT = 1;
+  CAN_BUSOFF = 2;
+  LEFT_ARM_ERROR = 3; // 手臂多电机故障
+  RIGHT_ARM_ERROR = 4;
+  WAIST_ERROR = 5;
+  LEFT_LEG_ERROR = 6;
+  RIGHT_LEG_ERROR = 7;
+};
+
+message HumanoidInfo {
+  optional uint64 timestamp = 1;
+  optional uint32 sequence = 2;
+  optional Drive drive = 3;
+  optional Arm left_arm = 4;
+  optional Arm right_arm = 5;
+  optional Waist waist = 6;
+  optional Leg left_leg = 7;
+  optional Leg right_leg = 8;
+  optional RobotError error = 9;
+  repeated DebugField debug = 10;
+};
+
+message HumanoidCmd {
+  optional uint64 timestamp = 1;
+  optional uint32 sequence = 2;
+  optional Drive drive = 3;
+  optional Arm left_arm = 4;
+  optional Arm right_arm = 5;
+  optional Waist waist = 6;
+  optional Leg left_leg = 7;
+  optional Leg right_leg = 8;
+};
+
+message JointArray {
+  repeated double pos = 1;
+  repeated double speed = 2;
+};
+
+message InputCmdArray {
+  optional double sin = 1;
+  optional double cos = 2;
+  optional double vx = 3;
+  optional double vy = 4;
+  optional double angle_yaw = 5;
+};
+
+message ActionArray {
+  repeated double cmd = 1;
+};
+
+message HumanoidRLInfo {
+  optional uint64 timestamp = 1;
+  optional uint32 sequence = 2;
+  optional JointArray joint_state = 3;
+};
+
+message DebugArray {
+  optional int32 index = 1;
+  optional bytes describe = 2;
+  optional Mode mode = 3;
+  optional double pos_cmd = 4;
+  optional double pos_fbk = 5;
+  optional double speed_cmd = 6;
+  optional double speed_fbk = 7;
+  optional double current_cmd = 8;
+  optional double currend_fbk = 9;
+  optional double torque_cmd = 10;
+  optional double torque_fbk = 11;
+  optional double cmd_rev = 12;
+  optional double fbk_rev = 13;
+  optional double pos_pulse = 14;
+};
+
+message Arbitration {
+  optional bool rpc_emergency_stop = 1;
+  optional bool pos_safty_protect = 2;
+  optional bool cmd_timeout = 3;
+  optional bool current_safty_protect = 4;
+};
+
+message MultiMotorInfo {
+  optional uint64 timestamp = 1;
+  optional uint32 sequence = 2;
+  repeated DebugArray motor_info = 3;
+  repeated int32 default_pulse = 4;
+  repeated DebugField debug = 5;
+  optional Arbitration arbitration = 6;
+  
+};
+
+message RLObservation {
+  optional uint64 timestamp = 1;
+  optional uint32 sequence = 2;
+  optional uint32 joint_num = 3;
+  optional InputCmdArray cmd_state = 4; // joystick V_x and theta
+  optional JointArray joint_state = 5; // motor state
+  repeated ActionArray action_state = 6; // multi frame action
+  repeated double imu_state = 7;
+};
+
+message RLAction {
+  optional uint64 timestamp = 1;
+  optional uint32 sequence = 2;
+  optional uint32 joint_num = 3;
+  optional Mode control_mode = 4;
+  optional ActionArray action = 5;
+  optional ActionArray last_action = 6;
+};
+
+message ArmCmd {
+  optional uint64 timestamp = 1;
+  optional uint32 sequence = 2;
+  optional uint32 joint_num = 3;
+  optional Mode control_mode = 4;
+  optional ActionArray cmd = 5;
+};

@@ -32,12 +32,30 @@
 
 from humanoid.envs import *
 from humanoid.utils import get_args, task_registry
+import os
+
+# os.environ['SSL_CERT_DIR'] = '/etc/ssl/certs'
+# os.environ['REQUESTS_CA_BUNDLE'] = '/etc/ssl/certs/ca-certificates.crt'
+def create_folder():
+    script_path = os.path.abspath(__file__)
+    script_dir = os.path.dirname(script_path)
+    gym_dir = os.path.dirname(script_dir)
+    base_dir = os.path.dirname(gym_dir)
+    logs_dir = os.path.join(base_dir, 'logs')
+    os.makedirs(logs_dir,exist_ok=True)
+    sub_dirs = ['cowa', 'cowa_est', 'cowa_fix', 'cowa_rma', 'cowa_vae', 'humanoid', 'checkpoint']
+    for sub_dir in sub_dirs:
+        path = os.path.join(logs_dir, sub_dir)
+        os.makedirs(path, exist_ok=True)
+        # print("create:", path)
 
 def train(args):
     env, env_cfg = task_registry.make_env(name=args.task, args=args)
     ppo_runner, train_cfg = task_registry.make_alg_runner(env=env, name=args.task, args=args)
+    task_registry.save_cfgs(name=args.task)
     ppo_runner.learn(num_learning_iterations=train_cfg.runner.max_iterations, init_at_random_ep_len=True)
 
 if __name__ == '__main__':
+    create_folder()
     args = get_args()
     train(args)

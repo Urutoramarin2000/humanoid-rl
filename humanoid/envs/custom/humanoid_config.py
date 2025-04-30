@@ -44,15 +44,19 @@ class XBotLCfg(LeggedRobotCfg):
         single_num_privileged_obs = 73
         num_privileged_obs = int(c_frame_stack * single_num_privileged_obs)
         num_actions = 12
-        num_envs = 4096
+        num_envs = 20
         episode_length_s = 24     # episode length in seconds
         use_ref_actions = False   # speed up training by using reference actions
 
     class safety:
         # safety factors
-        pos_limit = 1.0
-        vel_limit = 1.0
-        torque_limit = 0.85
+        pos_limit = 0.9
+        # vel_limit = 0.8
+        # acc_limit = 0.8
+        vel_limit = 0.8
+        acc_limit = 0.6
+        dof_acc_limits_ratio = 6    # acc_limit = dof_acc_limits_ratio * dof_vel_limits
+        torque_limit = 0.85    #0.85 xxx 1
 
     class asset(LeggedRobotCfg.asset):
         file = '{LEGGED_GYM_ROOT_DIR}/resources/robots/XBot/urdf/XBot-L.urdf'
@@ -60,11 +64,11 @@ class XBotLCfg(LeggedRobotCfg):
         name = "XBot-L"
         foot_name = "ankle_roll"
         knee_name = "knee"
-
+        disable_gravity = False
         terminate_after_contacts_on = ['base_link']
         penalize_contacts_on = ["base_link"]
-        self_collisions = 0  # 1 to disable, 0 to enable...bitwise filter
-        flip_visual_attachments = False
+        self_collisions = 1  # 1 to disable, 0 to enable...bitwise filter
+        flip_visual_attachments = False #
         replace_cylinder_with_capsule = False
         fix_base_link = False
 
@@ -146,7 +150,7 @@ class XBotLCfg(LeggedRobotCfg):
             # 0: never, 1: last sub-step, 2: all sub-steps (default=2)
             contact_collection = 2
 
-    class domain_rand:
+    class domain_rand(LeggedRobotCfg.domain_rand):
         randomize_friction = True
         friction_range = [0.1, 2.0]
         randomize_base_mass = True
@@ -160,6 +164,8 @@ class XBotLCfg(LeggedRobotCfg):
         action_noise = 0.02
 
     class commands(LeggedRobotCfg.commands):
+        curriculum = False
+        max_curriculum = 3
         # Vers: lin_vel_x, lin_vel_y, ang_vel_yaw, heading (in heading mode ang_vel_yaw is recomputed from heading error)
         num_commands = 4
         resampling_time = 8.  # time before command are changed[s]
@@ -184,7 +190,7 @@ class XBotLCfg(LeggedRobotCfg):
         # tracking reward = exp(error*sigma)
         tracking_sigma = 5
         max_contact_force = 700  # Forces above this value are penalized
-
+        curriculum = False 
         class scales:
             # reference motion tracking
             joint_pos = 1.6

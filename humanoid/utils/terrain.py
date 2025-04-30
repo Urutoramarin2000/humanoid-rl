@@ -124,8 +124,7 @@ class Terrain:
                 slope *= -1
             terrain_utils.pyramid_sloped_terrain(terrain, slope=slope, platform_size=3.)
         elif choice < self.proportions[1]:
-            terrain_utils.pyramid_sloped_terrain(terrain, slope=slope, platform_size=3.)
-            terrain_utils.random_uniform_terrain(terrain, min_height=-0.05, max_height=0.05, step=0.005, downsampled_scale=0.2)
+            terrain_utils.random_uniform_terrain(terrain, min_height=-0.005, max_height=0.005, step=0.005, downsampled_scale=0.1)
         elif choice < self.proportions[3]:
             if choice<self.proportions[2]:
                 step_height *= -1
@@ -217,7 +216,7 @@ class HumanoidTerrain(Terrain):
             rectangle_max_size = 2.
             terrain_utils.discrete_obstacles_terrain(terrain, discrete_obstacles_height, rectangle_min_size, rectangle_max_size, num_rectangles, platform_size=3.)
         elif choice < self.proportions[2]:
-            terrain_utils.random_uniform_terrain(terrain, min_height=-r_height, max_height=r_height, step=0.005, downsampled_scale=0.2)
+            terrain_utils.random_uniform_terrain(terrain, min_height=-0.06, max_height=0.06, step=0.005, downsampled_scale=0.2)
         elif choice < self.proportions[3]:
             terrain_utils.pyramid_sloped_terrain(terrain, slope=h_slope, platform_size=0.1)
         elif choice < self.proportions[4]:

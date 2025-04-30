@@ -35,8 +35,29 @@ from .base.legged_robot import LeggedRobot
 
 from .custom.humanoid_config import XBotLCfg, XBotLCfgPPO
 from .custom.humanoid_env import XBotLFreeEnv
+# cowa
+from .cowa.cowa_config import CowaCfg, CowaCfgPPO
+from .cowa.cowa_env import CowaFreeEnv
+
+# cowa FIX
+from .cowa_fix.cowa_fix_config import CowaFixCfg, CowaFixCfgPPO
+from .cowa_fix.cowa_fix_env import CowaFixEnv
+
+# cowa VAE
+from .cowa_vae.cowa_vae_config import CowaCfg_VAE, CowaCfgPPO_VAE
+# cowa EST
+from .cowa_est.cowa_est_config import CowaCfg_EST,CowaCfgPPO_EST
+# cowa RMA
+from .cowa_rma.cowa_rma_config import CowaCfgPPO_RMA, CowaCfg_RMA
+
 
 from humanoid.utils.task_registry import task_registry
 
+# cowa Wheel
 
 task_registry.register( "humanoid_ppo", XBotLFreeEnv, XBotLCfg(), XBotLCfgPPO() )
+task_registry.register( "cowa", CowaFreeEnv, CowaCfg(), CowaCfgPPO() )
+task_registry.register( "cowa_vae" ,CowaFreeEnv, CowaCfg_VAE(), CowaCfgPPO_VAE())
+task_registry.register( "cowa_fix", CowaFixEnv, CowaFixCfg(), CowaFixCfgPPO() )
+task_registry.register( "cowa_est" ,CowaFreeEnv, CowaCfg_EST(), CowaCfgPPO_EST())
+task_registry.register( "cowa_rma" ,CowaFreeEnv, CowaCfg_RMA(), CowaCfgPPO_RMA())

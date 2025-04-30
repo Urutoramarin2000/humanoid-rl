@@ -32,7 +32,7 @@
 import os
 import time
 import torch
-import wandb
+# import wandb
 import statistics
 from collections import deque
 from datetime import datetime
@@ -50,13 +50,6 @@ class OnPolicyRunner:
         self.alg_cfg = train_cfg["algorithm"]
         self.policy_cfg = train_cfg["policy"]
         self.all_cfg = train_cfg
-        self.wandb_run_name = (
-            datetime.now().strftime("%b%d_%H-%M-%S")
-            + "_"
-            + train_cfg["runner"]["experiment_name"]
-            + "_"
-            + train_cfg["runner"]["run_name"]
-        )
         self.device = device
         self.env = env
         if self.env.num_privileged_obs is not None:
@@ -93,12 +86,7 @@ class OnPolicyRunner:
     def learn(self, num_learning_iterations, init_at_random_ep_len=False):
         # initialize writer
         if self.log_dir is not None and self.writer is None:
-            wandb.init(
-                project="XBot",
-                sync_tensorboard=True,
-                name=self.wandb_run_name,
-                config=self.all_cfg,
-            )
+
             self.writer = SummaryWriter(log_dir=self.log_dir, flush_secs=10)
         if init_at_random_ep_len:
             self.env.episode_length_buf = torch.randint_like(
@@ -113,6 +101,7 @@ class OnPolicyRunner:
         ep_infos = []
         rewbuffer = deque(maxlen=100)
         lenbuffer = deque(maxlen=100)
+        
         cur_reward_sum = torch.zeros(
             self.env.num_envs, dtype=torch.float, device=self.device
         )
@@ -126,6 +115,7 @@ class OnPolicyRunner:
             # Rollout
             with torch.inference_mode():
                 for i in range(self.num_steps_per_env):
+
                     actions = self.alg.act(obs, critic_obs)
                     obs, privileged_obs, rewards, dones, infos = self.env.step(actions)
                     critic_obs = privileged_obs if privileged_obs is not None else obs
@@ -298,7 +288,7 @@ class OnPolicyRunner:
         self.alg.actor_critic.eval()  # switch to evaluation mode (dropout for example)
         if device is not None:
             self.alg.actor_critic.to(device)
-        return self.alg.actor_critic.act_inference
+        return self.alg.actor_critic.act_inference  # act_student / teacher
 
     def get_inference_critic(self, device=None):
         self.alg.actor_critic.eval()  # switch to evaluation mode (dropout for example)

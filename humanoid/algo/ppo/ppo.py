@@ -90,6 +90,7 @@ class PPO:
 
     def act(self, obs, critic_obs):
         # Compute the actions and values
+        # print(obs)
         self.transition.actions = self.actor_critic.act(obs).detach()
         self.transition.values = self.actor_critic.evaluate(critic_obs).detach()
         self.transition.actions_log_prob = self.actor_critic.get_actions_log_prob(self.transition.actions).detach()
@@ -127,7 +128,9 @@ class PPO:
 
                 self.actor_critic.act(obs_batch, masks=masks_batch, hidden_states=hid_states_batch[0])
                 actions_log_prob_batch = self.actor_critic.get_actions_log_prob(actions_batch)
+                # print('critic_obs_batch1', critic_obs_batch.shape)
                 value_batch = self.actor_critic.evaluate(critic_obs_batch, masks=masks_batch, hidden_states=hid_states_batch[1])
+                # print('critic_obs_batch2', critic_obs_batch.shape)
                 mu_batch = self.actor_critic.action_mean
                 sigma_batch = self.actor_critic.action_std
                 entropy_batch = self.actor_critic.entropy

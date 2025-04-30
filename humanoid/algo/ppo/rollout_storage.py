@@ -153,7 +153,6 @@ class RolloutStorage:
             critic_observations = self.privileged_observations.flatten(0, 1)
         else:
             critic_observations = observations
-
         actions = self.actions.flatten(0, 1)
         values = self.values.flatten(0, 1)
         returns = self.returns.flatten(0, 1)
@@ -171,6 +170,7 @@ class RolloutStorage:
 
                 obs_batch = observations[batch_idx]
                 critic_observations_batch = critic_observations[batch_idx]
+                # print('critic_observations_batch2', critic_observations_batch.shape)
                 actions_batch = actions[batch_idx]
                 target_values_batch = values[batch_idx]
                 returns_batch = returns[batch_idx]

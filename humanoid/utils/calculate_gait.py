@@ -32,6 +32,7 @@
 import numpy as np
 from scipy.optimize import fsolve
 import matplotlib.pyplot as plt
+import datetime
 
 def get_coefficients(h0, hswing, v0, vswing, hmax, swing_time):
     

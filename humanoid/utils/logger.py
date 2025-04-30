@@ -30,6 +30,8 @@
 # Copyright (c) 2024 Beijing RobotEra TECHNOLOGY CO.,LTD. All rights reserved.
 
 import matplotlib.pyplot as plt
+import matplotlib
+matplotlib.use('Agg')
 import numpy as np
 from collections import defaultdict
 from multiprocessing import Process, Value

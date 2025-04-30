@@ -1,0 +1,42 @@
+syntax = "proto2";
+package COWA.HumanoidMsg;
+
+message PressureSensor {
+  optional float pressure = 1;
+};
+
+message TorqueSensor {
+  optional float torque = 1;
+};
+
+message ArmRawData {
+  optional TorqueSensor shoulder_pitch = 1;
+  optional TorqueSensor shoulder_roll = 2;
+  optional TorqueSensor upper_arm = 3;
+  optional PressureSensor lower_arm = 4;
+  optional TorqueSensor wrists = 5;
+};
+
+message WaistRawData {
+  optional TorqueSensor waist_roll = 1;
+  optional TorqueSensor waist_yaw = 2;
+};
+
+message LegRawData {
+  optional TorqueSensor hip_roll = 1;
+  optional TorqueSensor hip_yaw = 2;
+  optional PressureSensor thigh_front = 3;
+  optional PressureSensor thigh_back = 4;
+  optional PressureSensor calve_left = 5;
+  optional PressureSensor calve_right = 6;
+};
+
+message SensorRawData {
+  optional uint64 timestamp = 1;
+  optional uint32 sequence = 2;
+  optional ArmRawData left_arm = 3;
+  optional ArmRawData right_arm = 4;
+  optional WaistRawData waist = 5;
+  optional LegRawData left_leg = 6;
+  optional LegRawData right_leg = 7;
+};

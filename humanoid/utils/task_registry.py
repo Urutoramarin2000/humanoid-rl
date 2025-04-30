@@ -36,16 +36,23 @@ from datetime import datetime
 
 from humanoid.algo import VecEnv
 from humanoid.algo import OnPolicyRunner
+from humanoid.algo import OnPolicyRunnerVAE
+from humanoid.algo import OnPolicyRunnerEstimator
+from humanoid.algo import OnPolicyRunnerRMA
+
 
 from humanoid import LEGGED_GYM_ROOT_DIR, LEGGED_GYM_ENVS_DIR
 from .helpers import get_args, update_cfg_from_args, class_to_dict, get_load_path, set_seed, parse_sim_params
 from humanoid.envs.base.legged_robot_config import LeggedRobotCfg, LeggedRobotCfgPPO
 
+import ntpath
+from shutil import copyfile
+
 class TaskRegistry():
     def __init__(self):
-        self.task_classes = {}
-        self.env_cfgs = {}
-        self.train_cfgs = {}
+        self.task_classes = {}  # VecEnv
+        self.env_cfgs = {}  # LeggedRobotCfg
+        self.train_cfgs = {}  # LeggedRobotCfgPPO
     
     def register(self, name: str, task_class: VecEnv, env_cfg: LeggedRobotCfg, train_cfg: LeggedRobotCfgPPO):
         self.task_classes[name] = task_class
@@ -61,7 +68,41 @@ class TaskRegistry():
         # copy seed
         env_cfg.seed = train_cfg.seed
         return env_cfg, train_cfg
-    
+
+    def save_cfgs(self, name) -> Tuple[LeggedRobotCfg, LeggedRobotCfgPPO]:
+        os.mkdir(self.log_dir)
+
+        save_items = [
+            os.path.join(
+                self.log_dir,
+                LEGGED_GYM_ENVS_DIR + "/base/legged_robot.py",
+            ),
+            os.path.join(
+                self.log_dir,
+                LEGGED_GYM_ENVS_DIR + "/base/legged_robot_config.py",
+            ),
+            os.path.join(
+                self.log_dir,
+                LEGGED_GYM_ENVS_DIR
+                + "/{}/".format(name)
+                + "{}_config.py".format(name),
+            ),
+            os.path.join(
+                self.log_dir,
+                LEGGED_GYM_ENVS_DIR
+                + "/cowa/cowa_env.py",
+            ),
+        ]
+        py_root = os.path.join(
+            LEGGED_GYM_ENVS_DIR + "/{}/".format(name) + "{}.py".format(name),
+        )
+        if os.path.exists(py_root):
+            save_items.append(os.path.join(self.log_dir, py_root))
+        if save_items is not None:
+            for save_item in save_items:
+                base_file_name = ntpath.basename(save_item)
+                copyfile(save_item, self.log_dir + "/" + base_file_name)
+
     def make_env(self, name, args=None, env_cfg=None) -> Tuple[VecEnv, LeggedRobotCfg]:
         """ Creates an environment either from a registered namme or from the provided config file.
 
@@ -80,6 +121,9 @@ class TaskRegistry():
         # if no args passed get command line arguments
         if args is None:
             args = get_args()
+
+        # 所给的名字必须是已经注册的   task_registry.register( "humanoid_ppo", XBotLFreeEnv, XBotLCfg(), XBotLCfgPPO() )
+
         # check if there is a registered env with that name
         if name in self.task_classes:
             task_class = self.get_task_class(name)
@@ -136,6 +180,7 @@ class TaskRegistry():
         # override cfg from args (if specified)
         _, train_cfg = update_cfg_from_args(None, train_cfg, args)
 
+        # log文件的地址和命名
         if log_root=="default":
             log_root = os.path.join(LEGGED_GYM_ROOT_DIR, 'logs', train_cfg.runner.experiment_name)
             log_dir = os.path.join(log_root, datetime.now().strftime('%b%d_%H-%M-%S') + '_' + train_cfg.runner.run_name)
@@ -143,7 +188,7 @@ class TaskRegistry():
             log_dir = None
         else:
             log_dir = os.path.join(log_root, datetime.now().strftime('%b%d_%H-%M-%S') + '_' + train_cfg.runner.run_name)
-        
+        self.log_dir = log_dir
         train_cfg_dict = class_to_dict(train_cfg)
         env_cfg_dict = class_to_dict(self.env_cfg_for_wandb)
         all_cfg = {**train_cfg_dict, **env_cfg_dict}
@@ -154,6 +199,10 @@ class TaskRegistry():
         resume = train_cfg.runner.resume
         if resume:
             # load previously trained model
+            print("--------------------------------")
+            print("log_root: ", log_root)
+            print("load_run:", train_cfg.runner.load_run )
+            print("train_cfg.runner.checkpoint: ", train_cfg.runner.checkpoint)
             resume_path = get_load_path(log_root, load_run=train_cfg.runner.load_run, checkpoint=train_cfg.runner.checkpoint)
             print(f"Loading model from: {resume_path}")
             runner.load(resume_path, load_optimizer=False)

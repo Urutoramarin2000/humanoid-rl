@@ -41,13 +41,17 @@ setup(
     author_email='zlw21gxy@gmail.com, wangyenjen@berkeley.edu, jianyuchen@tsinghua.edu.cn',
     description='Isaac Gym environments for humanoid robot',
     install_requires=['isaacgym',  # preview4
-                      'wandb',
-                      'DateTime',  # used for sort month
+                      # 'wandb',
+                      'protobuf==4.22.0',
                       'tensorboard',
                       'tqdm',
                       'numpy==1.23.5',
                       'opencv-python',
                       'mujoco==2.3.6',
                       'mujoco-python-viewer',
-                      'matplotlib']
+                      'matplotlib',
+                      'torchsummary',
+                      'meshcat',
+                      'sim_web_visualizer'
+                      ]
 )

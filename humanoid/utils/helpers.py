@@ -29,7 +29,6 @@
 #
 # Copyright (c) 2024 Beijing RobotEra TECHNOLOGY CO.,LTD. All rights reserved.
 
-import datetime
 import os
 import copy
 import torch
@@ -37,7 +36,7 @@ import numpy as np
 import random
 from isaacgym import gymapi
 from isaacgym import gymutil
-
+import datetime
 from humanoid import LEGGED_GYM_ROOT_DIR, LEGGED_GYM_ENVS_DIR
 
 
@@ -108,18 +107,14 @@ def parse_sim_params(args, cfg):
 
 
 def get_load_path(root, load_run=-1, checkpoint=-1):
-    def month_to_number(month):
-        return datetime.datetime.strptime(month, "%b").month
-
     try:
         runs = os.listdir(root)
-        try:
-            runs.sort(key=lambda x: (month_to_number(x[:3]), int(x[3:5]), x[6:]))
-        except ValueError as e:
-            print("WARNING - Could not sort runs by month: " + str(e))
-            runs.sort()
+        # TODO sort by date to handle change of month
+        runs.sort()
         if "exported" in runs:
             runs.remove("exported")
+        print("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
+        print("root path: ", os.path.join(root, runs[-1]))
         last_run = os.path.join(root, runs[-1])
     except:
         raise ValueError("No runs in this directory: " + root)
@@ -127,6 +122,7 @@ def get_load_path(root, load_run=-1, checkpoint=-1):
         load_run = last_run
     else:
         load_run = os.path.join(root, load_run)
+
     if checkpoint == -1:
         models = [file for file in os.listdir(load_run) if "model" in file]
         models.sort(key=lambda m: "{0:0>15}".format(m))
@@ -135,6 +131,7 @@ def get_load_path(root, load_run=-1, checkpoint=-1):
         model = "model_{}.pt".format(checkpoint)
 
     load_path = os.path.join(load_run, model)
+    # print('load_path: ', load_path)
     return load_path
 
 
@@ -169,7 +166,7 @@ def get_args():
         {
             "name": "--task",
             "type": str,
-            "default": "XBotL_free",
+            "default": "cowa",
             "help": "Resume training or start testing from a checkpoint. Overrides config file if provided.",
         },
         {
@@ -231,6 +228,13 @@ def get_args():
             "type": int,
             "help": "Maximum number of training iterations. Overrides config file if provided.",
         },
+        {
+            "name": "--env_device",
+            "type": int,
+            "default": "0",
+            "help": "Device used by the gym env (cpu, gpu, cuda:0, cuda:1 etc..)",
+        },
+        {"name": "--exptid", "type": str, "default": "", "help": "exptid"},
     ]
     # parse arguments
     args = gymutil.parse_arguments(
@@ -238,7 +242,7 @@ def get_args():
     )
 
     # name allignment
-    args.sim_device_id = args.compute_device_id
+    args.sim_device_id = args.env_device
     args.sim_device = args.sim_device_type
     if args.sim_device == "cuda":
         args.sim_device += f":{args.sim_device_id}"

@@ -191,6 +191,37 @@ class XBotLFreeEnv(LeggedRobot):
             actions += self.ref_action
         actions = torch.clip(actions, -self.cfg.normalization.clip_actions, self.cfg.normalization.clip_actions)
         # dynamic randomization
+
+        # debug air time
+        contact = self.contact_forces[:, self.feet_indices, 2] > 5.
+        self.contact_filt = torch.logical_or(contact, self.last_contacts)
+        self.last_contacts = contact
+        first_contact = (self.feet_air_time > 0.) * self.contact_filt
+        self.feet_air_time += self.dt
+        self.feet_air_time *= ~self.contact_filt
+        # print('feet air time', self.feet_air_time)
+
+        # debug feet heihgt
+        feet_z = self.rigid_state[:, self.feet_indices, 2] - 0.14
+        # print('feet heihgt', feet_z)
+        self.last_feet_z = feet_z
+        self.feet_height_smooth = self.feet_height - self.last_feet_z
+        self.feet_height_smooth_sum = torch.sum(torch.square(self.feet_height_smooth), dim=1)
+        # print('feet height smoothness', self.feet_height_smooth_sum)
+
+        # debug acc_smoothness
+        last_dof_vel_discrete = (self.last_actions - self.last_last_actions) / self.dt
+        dof_vel_discrete = (self.actions - self.last_actions) / self.dt
+        dof_acc_discrete = (dof_vel_discrete - last_dof_vel_discrete) / self.dt
+        dof_acc_error = torch.square(dof_acc_discrete)
+        dof_acc_error = torch.sum(dof_acc_error,dim=1)
+        # print('dof_acc_error',torch.sum(dof_acc_discrete,dim=1))
+
+        # debug dof vel
+        dof_vel_discrete = (self.actions - self.last_last_actions) / self.dt 
+        dof_vel_error = torch.sum(torch.square(dof_vel_discrete), dim=1)
+        # rew = torch.exp(-0.00001 * dof_vel_error)
+        # print('dof_vel_error', torch.sum(dof_vel_discrete))
         delay = torch.rand((self.num_envs, 1), device=self.device) * self.cfg.domain_rand.action_delay
         actions = (1 - delay) * actions + delay * self.actions
         actions += self.cfg.domain_rand.action_noise * torch.randn_like(actions) * actions
@@ -340,7 +371,7 @@ class XBotLFreeEnv(LeggedRobot):
         """
         contact = self.contact_forces[:, self.feet_indices, 2] > 5.
         stance_mask = self._get_gait_phase()
-        reward = torch.where(contact == stance_mask, 1.0, -0.3)
+        reward = torch.where(contact == stance_mask, 1, -0.3)
         return torch.mean(reward, dim=1)
 
     def _reward_orientation(self):
